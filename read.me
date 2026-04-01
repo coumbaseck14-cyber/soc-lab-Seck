@@ -1,0 +1,56 @@
+# SOC Lab — Projet Dockerisé
+
+**Étudiant :** COUMBQ SECK  
+**Licence 2 SIMAC — Université Numérique Cheikh Hamidou Kane (UN-CHK)**
+
+---
+
+## 1️⃣ Objectif
+
+Ce projet a pour objectif de mettre en place un **SOC (Security Operations Center)** simplifié sous Docker, avec les composants suivants :
+
+- **Wazuh** : détection et réponse aux intrusions
+- **Suricata** : moteur IDS/IPS avec règles personnalisées
+- **Grafana** : tableau de bord pour visualisation
+- **TheHive** : gestion des incidents et alertes
+
+---
+
+## 2️⃣ Structure du projet
+soc-lab-[NOM_ETUDIANT]/
+├── README.md
+├── docker-compose.yml
+├── .env.example
+├── .gitignore
+├── wazuh/
+│ └── config/
+├── suricata/
+│ ├── logs/ ← contient .gitkeep
+│ ├── rules/ ← règles personnalisées
+│ │ └── local.rules
+│ └── suricata.yaml ← configuration minimale
+├── grafana/
+│ └── dashboards/ ← contient .gitkeep
+├── thehive/
+│ └── config/ ← contient .gitkeep
+└── rapport/
+├── rapport-final.pdf
+└── captures/ ← contient .gitkeep
+
+---
+
+## 3️⃣ Prérequis
+
+- Docker & Docker Compose installés
+- Minimum 4 Go RAM libre
+- Système Linux (Ubuntu / Kali recommandé)
+
+---
+
+## 4️⃣ Déploiement
+
+1. Copier le fichier `.env.example` en `.env` et modifier si nécessaire :
+
+```bash
+cp .env.example .env
+nano .env

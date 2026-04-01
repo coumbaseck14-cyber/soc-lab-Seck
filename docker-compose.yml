@@ -1,0 +1,172 @@
+services:
+
+  #  ELASTICSEARCH 7.17.9 
+  wazuh.indexer:
+    image: elasticsearch:7.17.9
+    container_name: wazuh.indexer
+    hostname: wazuh.indexer
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+      - ingest.geoip.downloader.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - wazuh-indexer-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - soc-backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qE 'green|yellow'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  # WAZUH MANAGER
+  wazuh.manager:
+    image: wazuh/wazuh-manager:4.7.0
+    container_name: wazuh.manager
+    hostname: wazuh.manager
+    restart: unless-stopped
+    depends_on:
+      wazuh.indexer:
+        condition: service_healthy
+    networks:
+      - soc-backend
+      - soc-frontend
+    ports:
+      - "1514:1514/udp"
+      - "1515:1515/tcp"
+      - "55000:55000/tcp"
+    environment:
+      - INDEXER_URL=http://wazuh.indexer:9200
+    volumes:
+      - wazuh_data:/var/ossec/data
+      - ./suricata/logs:/var/log/suricata:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:55000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+
+  #  WAZUH DASHBOARD
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:4.7.0
+    container_name: wazuh.dashboard
+    restart: unless-stopped
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+    ports:
+      - "443:5601"
+    networks:
+      - soc-frontend
+      - soc-backend
+    environment:
+      - OPENSEARCH_HOSTS=http://wazuh.indexer:9200
+      - WAZUH_MANAGER_HOST=wazuh.manager
+      - SERVER_SSL_ENABLED=false
+    volumes:
+      - wazuh_dashboard_data:/usr/share/wazuh-dashboard/data
+
+  #  SURICATA 
+  suricata:
+    image: jasonish/suricata:latest
+    container_name: suricata
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./suricata/logs:/var/log/suricata
+    command: suricata -i eth0 -v
+
+  #  GRAFANA
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - soc-frontend
+      - soc-backend
+
+  #  CASSANDRA 
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    restart: unless-stopped
+    networks:
+      - soc-backend
+    environment:
+      MAX_HEAP_SIZE: 512M
+      HEAP_NEWSIZE: 128M
+      CASSANDRA_CLUSTER_NAME: "TheHive"
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster' 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  #  THEHIVE 
+  thehive:
+    image: strangebee/thehive:5
+    container_name: thehive
+    restart: unless-stopped
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    command: --secret "${THEHIVE_SECRET:-MySecretKey123}" --cql-hostnames cassandra
+    ports:
+      - "9000:9000"
+    networks:
+      - soc-frontend
+      - soc-backend
+    volumes:
+      - thehive-data:/opt/thp/thehive/data
+    environment:
+      - JAVA_OPTS=-Xms512m -Xmx512m
+
+  #  DVWA 
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: dvwa
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    networks:
+      - soc-frontend
+
+#  RÉSEAUX 
+networks:
+  soc-frontend:
+    driver: bridge
+  soc-backend:
+    driver: bridge
+    internal: true
+
+#  VOLUMES 
+volumes:
+  wazuh-indexer-data:
+  wazuh_data:
+  wazuh_dashboard_data:
+  grafana-data:
+  cassandra-data:
+  thehive-data:
